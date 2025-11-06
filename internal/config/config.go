@@ -13,9 +13,10 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	JiraURL      string `mapstructure:"jira_url"`
-	Email        string `mapstructure:"email"`
-	APIToken     string `mapstructure:"api_token"`
+	JiraURL        string `mapstructure:"jira_url"`
+	Email          string `mapstructure:"email"`
+	APIToken       string `mapstructure:"api_token"`
+	AuthType       string `mapstructure:"auth_type"` // "basic", "pat", "bearer"
 	DefaultProject string `mapstructure:"default_project"`
 }
 
@@ -31,22 +32,73 @@ func InitializeConfig() error {
 	}
 	jiraURL = strings.TrimSpace(jiraURL)
 
-	// Email
-	fmt.Print("Email: ")
-	email, err := reader.ReadString('\n')
+	// Ask for auth type
+	fmt.Println("\nAuthentication method:")
+	fmt.Println("  1. Email + API Token (Jira Cloud)")
+	fmt.Println("  2. Personal Access Token / PAT (Jira Server/DC)")
+	fmt.Println("  3. Username + Password (Basic Auth)")
+	fmt.Print("Select (1, 2, or 3) [default: 1]: ")
+	authChoice, err := reader.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("error reading email: %w", err)
+		return fmt.Errorf("error reading auth choice: %w", err)
 	}
-	email = strings.TrimSpace(email)
+	authChoice = strings.TrimSpace(authChoice)
+	if authChoice == "" {
+		authChoice = "1"
+	}
 
-	// API Token (hidden input)
-	fmt.Print("API Token (hidden): ")
-	apiTokenBytes, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return fmt.Errorf("error reading API token: %w", err)
+	var authType, email, apiToken string
+
+	if authChoice == "2" {
+		// PAT authentication
+		authType = "pat"
+		fmt.Println("\nUsing Personal Access Token authentication")
+		fmt.Println("To create a PAT, go to: " + jiraURL + "/secure/ViewProfile.jspa")
+		fmt.Println("Then click 'Personal Access Tokens' in the sidebar")
+		fmt.Print("\nPersonal Access Token (hidden): ")
+		apiTokenBytes, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return fmt.Errorf("error reading PAT: %w", err)
+		}
+		apiToken = strings.TrimSpace(string(apiTokenBytes))
+		fmt.Println() // New line after hidden input
+	} else if authChoice == "3" {
+		// Username + Password authentication
+		authType = "basic"
+		fmt.Println("\nUsing Username + Password authentication")
+		fmt.Print("Username: ")
+		email, err = reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("error reading username: %w", err)
+		}
+		email = strings.TrimSpace(email)
+
+		fmt.Print("Password (hidden): ")
+		passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return fmt.Errorf("error reading password: %w", err)
+		}
+		apiToken = strings.TrimSpace(string(passwordBytes))
+		fmt.Println() // New line after hidden input
+	} else {
+		// Email + API Token authentication (default)
+		authType = "basic"
+		fmt.Println("\nUsing Email + API Token authentication")
+		fmt.Print("Email: ")
+		email, err = reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("error reading email: %w", err)
+		}
+		email = strings.TrimSpace(email)
+
+		fmt.Print("API Token (hidden): ")
+		apiTokenBytes, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return fmt.Errorf("error reading API token: %w", err)
+		}
+		apiToken = strings.TrimSpace(string(apiTokenBytes))
+		fmt.Println() // New line after hidden input
 	}
-	apiToken := strings.TrimSpace(string(apiTokenBytes))
-	fmt.Println() // New line after hidden input
 
 	// Default Project (optional)
 	fmt.Print("Default project key (optional, e.g., PROJ): ")
@@ -58,6 +110,7 @@ func InitializeConfig() error {
 
 	// Set values in viper
 	viper.Set("jira_url", jiraURL)
+	viper.Set("auth_type", authType)
 	viper.Set("email", email)
 	viper.Set("api_token", apiToken)
 	viper.Set("default_project", defaultProject)
@@ -98,9 +151,14 @@ func ValidateConfig(cfg *Config) error {
 	if cfg.JiraURL == "" {
 		return fmt.Errorf("jira_url is required")
 	}
-	if cfg.Email == "" {
-		return fmt.Errorf("email is required")
+
+	// For PAT auth, we don't need email
+	if cfg.AuthType != "pat" {
+		if cfg.Email == "" {
+			return fmt.Errorf("email is required for basic authentication")
+		}
 	}
+
 	if cfg.APIToken == "" {
 		return fmt.Errorf("api_token is required")
 	}

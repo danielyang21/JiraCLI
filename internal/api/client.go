@@ -13,6 +13,7 @@ type Client struct {
 	BaseURL    string
 	Email      string
 	APIToken   string
+	AuthType   string // "basic" or "pat"
 	HTTPClient *http.Client
 }
 
@@ -22,6 +23,20 @@ func NewClient(baseURL, email, apiToken string) *Client {
 		BaseURL:  baseURL,
 		Email:    email,
 		APIToken: apiToken,
+		AuthType: "basic", // default to basic auth
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// NewClientWithAuthType creates a new Jira API client with specific auth type
+func NewClientWithAuthType(baseURL, email, apiToken, authType string) *Client {
+	return &Client{
+		BaseURL:  baseURL,
+		Email:    email,
+		APIToken: apiToken,
+		AuthType: authType,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -40,9 +55,16 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Respo
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "JiraCLI/0.1.0")
 
-	// Basic authentication
-	req.SetBasicAuth(c.Email, c.APIToken)
+	// Apply authentication based on type
+	if c.AuthType == "pat" {
+		// Personal Access Token - use Bearer token
+		req.Header.Set("Authorization", "Bearer "+c.APIToken)
+	} else {
+		// Basic authentication (email + API token)
+		req.SetBasicAuth(c.Email, c.APIToken)
+	}
 
 	// Perform request
 	resp, err := c.HTTPClient.Do(req)
@@ -55,7 +77,12 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Respo
 
 // TestConnection tests the connection to Jira
 func (c *Client) TestConnection() error {
-	resp, err := c.doRequest("GET", "/rest/api/3/myself", nil)
+	// Use API v3 for Jira Cloud (basic auth), v2 for Jira Server/DC (PAT)
+	apiVersion := "3"
+	if c.AuthType == "pat" {
+		apiVersion = "2"
+	}
+	resp, err := c.doRequest("GET", "/rest/api/"+apiVersion+"/myself", nil)
 	if err != nil {
 		return err
 	}
@@ -71,7 +98,12 @@ func (c *Client) TestConnection() error {
 
 // GetIssue retrieves a single issue by key
 func (c *Client) GetIssue(issueKey string) (*Issue, error) {
-	endpoint := fmt.Sprintf("/rest/api/3/issue/%s", issueKey)
+	// Use API v3 for Jira Cloud (basic auth), v2 for Jira Server/DC (PAT)
+	apiVersion := "3"
+	if c.AuthType == "pat" {
+		apiVersion = "2"
+	}
+	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s", apiVersion, issueKey)
 	resp, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -93,7 +125,17 @@ func (c *Client) GetIssue(issueKey string) (*Issue, error) {
 
 // SearchIssues searches for issues using JQL
 func (c *Client) SearchIssues(jql string, maxResults int) (*SearchResults, error) {
-	endpoint := fmt.Sprintf("/rest/api/3/search?jql=%s&maxResults=%d", jql, maxResults)
+	var endpoint string
+
+	// Jira Cloud (basic auth) uses API v3 with /search/jql endpoint
+	// Jira Server/DC (PAT) uses API v2 with /search endpoint
+	if c.AuthType == "pat" {
+		endpoint = fmt.Sprintf("/rest/api/2/search?jql=%s&maxResults=%d", jql, maxResults)
+	} else {
+		// Jira Cloud requires /search/jql endpoint (new as of 2024)
+		// Must explicitly request fields (default is only "id")
+		endpoint = fmt.Sprintf("/rest/api/3/search/jql?jql=%s&maxResults=%d&fields=*navigable", jql, maxResults)
+	}
 	resp, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err

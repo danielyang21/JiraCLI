@@ -1,6 +1,44 @@
 package api
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// JiraTime is a custom time type that handles Jira's timestamp format
+type JiraTime struct {
+	time.Time
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface
+func (jt *JiraTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), "\"")
+	if s == "null" || s == "" {
+		jt.Time = time.Time{}
+		return nil
+	}
+
+	// Try standard RFC3339 format first
+	t, err := time.Parse(time.RFC3339, s)
+	if err == nil {
+		jt.Time = t
+		return nil
+	}
+
+	// Try Jira's format: 2025-11-05T22:21:49.975-0500
+	// Convert -0500 to -05:00
+	if len(s) >= 5 && (s[len(s)-5] == '+' || s[len(s)-5] == '-') {
+		s = s[:len(s)-2] + ":" + s[len(s)-2:]
+	}
+
+	t, err = time.Parse(time.RFC3339, s)
+	if err != nil {
+		return err
+	}
+
+	jt.Time = t
+	return nil
+}
 
 // Issue represents a Jira issue
 type Issue struct {
@@ -18,8 +56,8 @@ type IssueFields struct {
 	Priority    Priority    `json:"priority"`
 	Assignee    *User       `json:"assignee"`
 	Reporter    *User       `json:"reporter"`
-	Created     time.Time   `json:"created"`
-	Updated     time.Time   `json:"updated"`
+	Created     JiraTime    `json:"created"`
+	Updated     JiraTime    `json:"updated"`
 	Project     Project     `json:"project"`
 }
 
