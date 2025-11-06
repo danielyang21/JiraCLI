@@ -10,7 +10,6 @@ import (
 
 var cfgFile string
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "jira",
 	Short: "A high-performance CLI tool for interacting with Jira",
@@ -35,14 +34,11 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-
-	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.jira-cli.yaml)")
 	rootCmd.PersistentFlags().String("profile", "default", "configuration profile to use")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().BoolP("json", "j", false, "output in JSON format")
 
-	// Bind flags to viper
 	viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 	viper.BindPFlag("json", rootCmd.PersistentFlags().Lookup("json"))

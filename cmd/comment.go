@@ -16,13 +16,9 @@ var commentCmd = &cobra.Command{
 		ticketKey := args[0]
 		commentText := args[1]
 
-		// Load and validate configuration
 		cfg := config.LoadAndValidate()
-
-		// Create API client
 		client := cfg.NewAPIClient()
 
-		// Add comment to issue
 		fmt.Printf("Adding comment to %s...\n", ticketKey)
 		err := client.AddComment(ticketKey, commentText)
 		ui.FatalIfError(err, "Error adding comment")

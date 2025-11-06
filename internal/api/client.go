@@ -22,7 +22,7 @@ func NewClient(baseURL, email, apiToken string) *Client {
 		BaseURL:  baseURL,
 		Email:    email,
 		APIToken: apiToken,
-		AuthType: "basic", // default to basic auth
+		AuthType: "basic",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -53,7 +53,6 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Respo
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "JiraCLI/0.1.0")
 
-
 	if c.AuthType == "pat" {
 		req.Header.Set("Authorization", "Bearer "+c.APIToken)
 	} else {
@@ -68,7 +67,6 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Respo
 	return resp, nil
 }
 
-// TestConnection tests the connection to Jira
 func (c *Client) TestConnection() error {
 	// Use API v3 for Jira Cloud (basic auth), v2 for Jira Server/DC (PAT)
 	apiVersion := "3"
@@ -182,8 +180,6 @@ func (c *Client) AddComment(issueKey, comment string) error {
 	}
 
 	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/comment", apiVersion, issueKey)
-
-	// Create a reader from the JSON bytes
 	bodyReader := bytes.NewReader(requestBody)
 
 	resp, err := c.doRequest("POST", endpoint, bodyReader)

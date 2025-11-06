@@ -21,26 +21,20 @@ Examples:
 		ticketKey := args[0]
 		showComments, _ := cmd.Flags().GetBool("comments")
 
-		// Load and validate configuration
 		cfg := config.LoadAndValidate()
 
-		// Create API client
 		client := cfg.NewAPIClient()
 
-		// Fetch issue
 		fmt.Printf("Fetching details for %s...\n\n", ticketKey)
 		issue, err := client.GetIssue(ticketKey)
 		ui.FatalIfError(err, "Error fetching ticket")
 
-		// Render issue details
 		ui.RenderIssueDetail(issue, cfg.JiraURL, showComments)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(viewCmd)
-
-	// Flags
 	viewCmd.Flags().BoolP("comments", "c", false, "show comments")
 	viewCmd.Flags().BoolP("full", "f", false, "show full details including custom fields")
 }

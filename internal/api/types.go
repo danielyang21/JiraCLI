@@ -46,7 +46,7 @@ type Issue struct {
 
 type IssueFields struct {
 	Summary     string      `json:"summary"`
-	Description interface{} `json:"description"` // Can be string or complex object
+	Description interface{} `json:"description"`
 	IssueType   IssueType   `json:"issuetype"`
 	Status      Status      `json:"status"`
 	Priority    Priority    `json:"priority"`
@@ -75,10 +75,10 @@ type Priority struct {
 }
 
 type User struct {
-	AccountID   string `json:"accountId"`
-	DisplayName string `json:"displayName"`
+	AccountID    string `json:"accountId"`
+	DisplayName  string `json:"displayName"`
 	EmailAddress string `json:"emailAddress"`
-	Active      bool   `json:"active"`
+	Active       bool   `json:"active"`
 }
 
 type Project struct {

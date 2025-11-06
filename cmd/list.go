@@ -21,22 +21,15 @@ Examples:
   jira list --status "To Do"   # List tickets with specific status
   jira list --assignee @me     # List tickets assigned to you`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Load and validate configuration
 		cfg := config.LoadAndValidate()
-
-		// Build JQL query from flags
 		jql := buildJQLQuery(cmd, cfg)
 		limit, _ := cmd.Flags().GetInt("limit")
-
-		// Create API client
 		client := cfg.NewAPIClient()
 
-		// Search issues
 		fmt.Println("Fetching tickets...")
 		results, err := client.SearchIssues(url.QueryEscape(jql), limit)
 		ui.FatalIfError(err, "Error fetching tickets")
 
-		// Render results
 		ui.RenderIssueList(results)
 	},
 }
@@ -78,8 +71,6 @@ func buildJQLQuery(cmd *cobra.Command, cfg *config.Config) string {
 
 func init() {
 	rootCmd.AddCommand(listCmd)
-
-	// Flags for filtering
 	listCmd.Flags().StringP("project", "p", "", "filter by project key")
 	listCmd.Flags().StringP("status", "s", "", "filter by status")
 	listCmd.Flags().StringP("assignee", "a", "", "filter by assignee (@me for yourself)")

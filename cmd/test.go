@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// testCmd represents the test command
 var testCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Test Jira API connection",
@@ -17,7 +16,6 @@ var testCmd = &cobra.Command{
 This command will attempt to connect to Jira and retrieve your user information
 to verify that your credentials are working correctly.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Load and validate configuration
 		cfg := config.LoadAndValidate()
 
 		fmt.Println("Testing Jira API connection...")
@@ -32,10 +30,8 @@ to verify that your credentials are working correctly.`,
 		}
 		fmt.Printf("Auth Type: %s\n", authType)
 
-		// Create API client
 		client := cfg.NewAPIClient()
 
-		// Test connection
 		fmt.Println("Attempting to connect...")
 		err := client.TestConnection()
 		if err != nil {

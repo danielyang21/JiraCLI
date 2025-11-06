@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/danielyan21/JiraCLI/internal/config"
+	"github.com/spf13/cobra"
 )
 
-// initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize JiraCLI configuration",

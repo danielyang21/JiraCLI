@@ -20,7 +20,6 @@ type Config struct {
 	DefaultProject string `mapstructure:"default_project"`
 }
 
-// InitializeConfig prompts the user for configuration values and saves them
 func InitializeConfig() error {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -31,7 +30,6 @@ func InitializeConfig() error {
 	}
 	jiraURL = strings.TrimSpace(jiraURL)
 
-	// Ask for auth type
 	fmt.Println("\nAuthentication method:")
 	fmt.Println("  1. Email + API Token (Jira Cloud)")
 	fmt.Println("  2. Personal Access Token / PAT (Jira Server/DC)")
@@ -48,8 +46,8 @@ func InitializeConfig() error {
 
 	var authType, email, apiToken string
 
-	if authChoice == "2" {
-		// PAT authentication
+	switch authChoice {
+	case "2":
 		authType = "pat"
 		fmt.Println("\nUsing Personal Access Token authentication")
 		fmt.Println("To create a PAT, go to: " + jiraURL + "/secure/ViewProfile.jspa")
@@ -61,7 +59,7 @@ func InitializeConfig() error {
 		}
 		apiToken = strings.TrimSpace(string(apiTokenBytes))
 		fmt.Println()
-	} else if authChoice == "3" {
+	case "3":
 		// Username + Password authentication
 		authType = "basic"
 		fmt.Println("\nUsing Username + Password authentication")
@@ -79,7 +77,7 @@ func InitializeConfig() error {
 		}
 		apiToken = strings.TrimSpace(string(passwordBytes))
 		fmt.Println()
-	} else {
+	default:
 		// Email + API Token authentication (default)
 		authType = "basic"
 		fmt.Println("\nUsing Email + API Token authentication")
@@ -99,7 +97,6 @@ func InitializeConfig() error {
 		fmt.Println()
 	}
 
-
 	fmt.Print("Default project key (optional, e.g., PROJ): ")
 	defaultProject, err := reader.ReadString('\n')
 	if err != nil {
@@ -107,7 +104,6 @@ func InitializeConfig() error {
 	}
 	defaultProject = strings.TrimSpace(defaultProject)
 
-	// Set values in viper
 	viper.Set("jira_url", jiraURL)
 	viper.Set("auth_type", authType)
 	viper.Set("email", email)
@@ -122,7 +118,6 @@ func InitializeConfig() error {
 
 	configPath := home + "/.jira-cli.yaml"
 
-	// Write config file
 	if err := viper.WriteConfigAs(configPath); err != nil {
 		return fmt.Errorf("error writing config file: %w", err)
 	}
@@ -136,7 +131,6 @@ func InitializeConfig() error {
 	return nil
 }
 
-// LoadConfig loads and returns the configuration
 func LoadConfig() (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
@@ -145,13 +139,11 @@ func LoadConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-// ValidateConfig checks if the configuration is valid
 func ValidateConfig(cfg *Config) error {
 	if cfg.JiraURL == "" {
 		return fmt.Errorf("jira_url is required")
 	}
 
-	// For PAT auth, we don't need email
 	if cfg.AuthType != "pat" {
 		if cfg.Email == "" {
 			return fmt.Errorf("email is required for basic authentication")
@@ -164,7 +156,6 @@ func ValidateConfig(cfg *Config) error {
 	return nil
 }
 
-// LoadAndValidate loads and validates the configuration, exiting on error
 func LoadAndValidate() *Config {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -182,11 +173,10 @@ func LoadAndValidate() *Config {
 	return cfg
 }
 
-// NewAPIClient creates a new API client from config
 func (cfg *Config) NewAPIClient() *api.Client {
 	authType := cfg.AuthType
 	if authType == "" {
-		authType = "basic" // default to basic auth for backwards compatibility
+		authType = "basic"
 	}
 	return api.NewClientWithAuthType(cfg.JiraURL, cfg.Email, cfg.APIToken, authType)
 }
