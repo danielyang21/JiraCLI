@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,7 +9,6 @@ import (
 	"time"
 )
 
-// Client represents a Jira API client
 type Client struct {
 	BaseURL    string
 	Email      string
@@ -17,7 +17,6 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
-// NewClient creates a new Jira API client
 func NewClient(baseURL, email, apiToken string) *Client {
 	return &Client{
 		BaseURL:  baseURL,
@@ -30,7 +29,6 @@ func NewClient(baseURL, email, apiToken string) *Client {
 	}
 }
 
-// NewClientWithAuthType creates a new Jira API client with specific auth type
 func NewClientWithAuthType(baseURL, email, apiToken, authType string) *Client {
 	return &Client{
 		BaseURL:  baseURL,
@@ -43,7 +41,6 @@ func NewClientWithAuthType(baseURL, email, apiToken, authType string) *Client {
 	}
 }
 
-// doRequest performs an HTTP request with authentication
 func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Response, error) {
 	url := c.BaseURL + endpoint
 
@@ -52,21 +49,17 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Respo
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "JiraCLI/0.1.0")
 
-	// Apply authentication based on type
+
 	if c.AuthType == "pat" {
-		// Personal Access Token - use Bearer token
 		req.Header.Set("Authorization", "Bearer "+c.APIToken)
 	} else {
-		// Basic authentication (email + API token)
 		req.SetBasicAuth(c.Email, c.APIToken)
 	}
 
-	// Perform request
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error performing request: %w", err)
@@ -96,7 +89,6 @@ func (c *Client) TestConnection() error {
 	return nil
 }
 
-// GetIssue retrieves a single issue by key
 func (c *Client) GetIssue(issueKey string) (*Issue, error) {
 	// Use API v3 for Jira Cloud (basic auth), v2 for Jira Server/DC (PAT)
 	apiVersion := "3"
@@ -123,7 +115,6 @@ func (c *Client) GetIssue(issueKey string) (*Issue, error) {
 	return &issue, nil
 }
 
-// SearchIssues searches for issues using JQL
 func (c *Client) SearchIssues(jql string, maxResults int) (*SearchResults, error) {
 	var endpoint string
 
@@ -155,19 +146,65 @@ func (c *Client) SearchIssues(jql string, maxResults int) (*SearchResults, error
 	return &results, nil
 }
 
-// AddComment adds a comment to an issue
 func (c *Client) AddComment(issueKey, comment string) error {
-	// TODO: Implement comment addition
-	return fmt.Errorf("not yet implemented")
+	apiVersion := "3"
+	var requestBody []byte
+	var err error
+
+	if c.AuthType == "pat" {
+		apiVersion = "2"
+		requestBody, err = json.Marshal(map[string]string{
+			"body": comment,
+		})
+	} else {
+		// API v3 uses Atlassian Document Format (ADF)
+		requestBody, err = json.Marshal(map[string]interface{}{
+			"body": map[string]interface{}{
+				"type":    "doc",
+				"version": 1,
+				"content": []map[string]interface{}{
+					{
+						"type": "paragraph",
+						"content": []map[string]interface{}{
+							{
+								"type": "text",
+								"text": comment,
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+
+	if err != nil {
+		return fmt.Errorf("error creating request body: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/comment", apiVersion, issueKey)
+
+	// Create a reader from the JSON bytes
+	bodyReader := bytes.NewReader(requestBody)
+
+	resp, err := c.doRequest("POST", endpoint, bodyReader)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to add comment (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
-// UpdateIssueStatus updates the status of an issue
 func (c *Client) UpdateIssueStatus(issueKey, status string) error {
 	// TODO: Implement status transition
 	return fmt.Errorf("not yet implemented")
 }
 
-// AssignIssue assigns an issue to a user
 func (c *Client) AssignIssue(issueKey, accountID string) error {
 	// TODO: Implement issue assignment
 	return fmt.Errorf("not yet implemented")

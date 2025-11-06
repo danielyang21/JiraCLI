@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/danielyan21/JiraCLI/internal/api"
 	"github.com/danielyan21/JiraCLI/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -18,20 +17,8 @@ var testCmd = &cobra.Command{
 This command will attempt to connect to Jira and retrieve your user information
 to verify that your credentials are working correctly.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Load configuration
-		cfg, err := config.LoadConfig()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-			fmt.Fprintln(os.Stderr, "Run 'jira init' to set up your configuration")
-			os.Exit(1)
-		}
-
-		// Validate configuration
-		if err := config.ValidateConfig(cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid config: %v\n", err)
-			fmt.Fprintln(os.Stderr, "Run 'jira init' to set up your configuration")
-			os.Exit(1)
-		}
+		// Load and validate configuration
+		cfg := config.LoadAndValidate()
 
 		fmt.Println("Testing Jira API connection...")
 		fmt.Printf("URL: %s\n", cfg.JiraURL)
@@ -39,17 +26,18 @@ to verify that your credentials are working correctly.`,
 		fmt.Println("API Token: [HIDDEN]")
 		fmt.Println()
 
-		// Create API client with auth type
 		authType := cfg.AuthType
 		if authType == "" {
-			authType = "basic" // default to basic auth for backwards compatibility
+			authType = "basic"
 		}
 		fmt.Printf("Auth Type: %s\n", authType)
-		client := api.NewClientWithAuthType(cfg.JiraURL, cfg.Email, cfg.APIToken, authType)
+
+		// Create API client
+		client := cfg.NewAPIClient()
 
 		// Test connection
 		fmt.Println("Attempting to connect...")
-		err = client.TestConnection()
+		err := client.TestConnection()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\n❌ Connection failed: %v\n\n", err)
 			fmt.Fprintln(os.Stderr, "Troubleshooting tips:")

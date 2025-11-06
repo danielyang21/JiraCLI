@@ -7,11 +7,11 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/danielyan21/JiraCLI/internal/api"
 	"github.com/spf13/viper"
 	"golang.org/x/term"
 )
 
-// Config represents the application configuration
 type Config struct {
 	JiraURL        string `mapstructure:"jira_url"`
 	Email          string `mapstructure:"email"`
@@ -24,7 +24,6 @@ type Config struct {
 func InitializeConfig() error {
 	reader := bufio.NewReader(os.Stdin)
 
-	// Jira URL
 	fmt.Print("Jira URL (e.g., https://yourcompany.atlassian.net): ")
 	jiraURL, err := reader.ReadString('\n')
 	if err != nil {
@@ -61,7 +60,7 @@ func InitializeConfig() error {
 			return fmt.Errorf("error reading PAT: %w", err)
 		}
 		apiToken = strings.TrimSpace(string(apiTokenBytes))
-		fmt.Println() // New line after hidden input
+		fmt.Println()
 	} else if authChoice == "3" {
 		// Username + Password authentication
 		authType = "basic"
@@ -79,7 +78,7 @@ func InitializeConfig() error {
 			return fmt.Errorf("error reading password: %w", err)
 		}
 		apiToken = strings.TrimSpace(string(passwordBytes))
-		fmt.Println() // New line after hidden input
+		fmt.Println()
 	} else {
 		// Email + API Token authentication (default)
 		authType = "basic"
@@ -97,10 +96,10 @@ func InitializeConfig() error {
 			return fmt.Errorf("error reading API token: %w", err)
 		}
 		apiToken = strings.TrimSpace(string(apiTokenBytes))
-		fmt.Println() // New line after hidden input
+		fmt.Println()
 	}
 
-	// Default Project (optional)
+
 	fmt.Print("Default project key (optional, e.g., PROJ): ")
 	defaultProject, err := reader.ReadString('\n')
 	if err != nil {
@@ -163,4 +162,31 @@ func ValidateConfig(cfg *Config) error {
 		return fmt.Errorf("api_token is required")
 	}
 	return nil
+}
+
+// LoadAndValidate loads and validates the configuration, exiting on error
+func LoadAndValidate() *Config {
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Run 'jira init' to set up your configuration")
+		os.Exit(1)
+	}
+
+	if err := ValidateConfig(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid config: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Run 'jira init' to set up your configuration")
+		os.Exit(1)
+	}
+
+	return cfg
+}
+
+// NewAPIClient creates a new API client from config
+func (cfg *Config) NewAPIClient() *api.Client {
+	authType := cfg.AuthType
+	if authType == "" {
+		authType = "basic" // default to basic auth for backwards compatibility
+	}
+	return api.NewClientWithAuthType(cfg.JiraURL, cfg.Email, cfg.APIToken, authType)
 }
