@@ -113,3 +113,39 @@ type TransitionResponse struct {
 	Expand      string       `json:"expand"`
 	Transitions []Transition `json:"transitions"`
 }
+
+type CreateIssueRequest struct {
+	Fields CreateIssueFields `json:"fields"`
+}
+
+type CreateIssueFields struct {
+	Project     ProjectRef     `json:"project"`
+	Summary     string         `json:"summary"`
+	Description interface{}    `json:"description,omitempty"`
+	IssueType   IssueTypeRef   `json:"issuetype"`
+	Priority    *PriorityRef   `json:"priority,omitempty"`
+	Assignee    *AssigneeRef   `json:"assignee,omitempty"`
+}
+
+type ProjectRef struct {
+	Key string `json:"key"`
+}
+
+type IssueTypeRef struct {
+	Name string `json:"name"`
+}
+
+type PriorityRef struct {
+	Name string `json:"name"`
+}
+
+type AssigneeRef struct {
+	AccountID string `json:"accountId,omitempty"`
+	Name      string `json:"name,omitempty"`
+}
+
+type CreateIssueResponse struct {
+	ID   string `json:"id"`
+	Key  string `json:"key"`
+	Self string `json:"self"`
+}
