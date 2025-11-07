@@ -4,17 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 )
 
 func (c *Client) AddComment(issueKey, comment string) error {
-	apiVersion := "3"
+	apiVersion := c.getAPIVersion()
 	var requestBody []byte
 	var err error
 
 	if c.AuthType == "pat" {
-		apiVersion = "2"
 		requestBody, err = json.Marshal(map[string]string{
 			"body": comment,
 		})
@@ -38,24 +35,16 @@ func (c *Client) AddComment(issueKey, comment string) error {
 			},
 		})
 	}
-
 	if err != nil {
-		return fmt.Errorf("error creating request body: %w", err)
+		return fmt.Errorf("marshaling comment: %w", err)
 	}
 
 	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/comment", apiVersion, issueKey)
-	bodyReader := bytes.NewReader(requestBody)
-
-	resp, err := c.doRequest("POST", endpoint, bodyReader)
+	resp, err := c.doRequest("POST", endpoint, bytes.NewReader(requestBody))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to add comment (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return checkResponse(resp)
 }

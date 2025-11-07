@@ -45,12 +45,16 @@ func RenderIssueDetail(issue *api.Issue, jiraURL string, showComments bool) {
 }
 
 func printTableHeader(c *ColorFuncs) {
-	fmt.Printf("%-12s %-15s %-20s %s\n",
-		c.Bold("KEY"),
-		c.Bold("STATUS"),
-		c.Bold("ASSIGNEE"),
-		c.Bold("SUMMARY"))
-	fmt.Println(strings.Repeat("-", 80))
+	keyHeader := fmt.Sprintf("%-10s", "KEY")
+	statusHeader := fmt.Sprintf("%-12s", "STATUS")
+	assigneeHeader := fmt.Sprintf("%-12s", "ASSIGNEE")
+	fmt.Printf("%s %s %s %s\n",
+		keyHeader,
+		statusHeader,
+		assigneeHeader,
+		"SUMMARY",
+	)
+	fmt.Println(strings.Repeat("-", 70))
 }
 
 func printIssueRow(issue api.Issue, c *ColorFuncs) {
@@ -63,10 +67,14 @@ func printIssueRow(issue api.Issue, c *ColorFuncs) {
 	summary := Truncate(issue.Fields.Summary, 40)
 	statusColor := GetStatusColor(issue.Fields.Status.Name)
 
-	fmt.Printf("%-12s %-15s %-20s %s\n",
-		c.Cyan(issue.Key),
-		statusColor(issue.Fields.Status.Name),
-		c.Yellow(assigneeName),
+	key := fmt.Sprintf("%-10s", issue.Key)
+	status := fmt.Sprintf("%-12s", issue.Fields.Status.Name)
+	assignee := fmt.Sprintf("%-12s", assigneeName)
+
+	fmt.Printf("%s %s %s %s\n",
+		c.Cyan(key),
+		statusColor(status),
+		c.Yellow(assignee),
 		summary,
 	)
 }

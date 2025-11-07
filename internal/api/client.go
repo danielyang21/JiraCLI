@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -65,22 +66,34 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader) (*http.Respo
 	return resp, nil
 }
 
-func (c *Client) TestConnection() error {
-	// Use API v3 for Jira Cloud (basic auth), v2 for Jira Server/DC (PAT)
-	apiVersion := "3"
-	if c.AuthType == "pat" {
-		apiVersion = "2"
+func checkResponse(resp *http.Response) error {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
 	}
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+}
+
+func decodeJSON(resp *http.Response, v interface{}) error {
+	if err := checkResponse(resp); err != nil {
+		return err
+	}
+	return json.NewDecoder(resp.Body).Decode(v)
+}
+
+func (c *Client) getAPIVersion() string {
+	if c.AuthType == "pat" {
+		return "2"
+	}
+	return "3"
+}
+
+func (c *Client) TestConnection() error {
+	apiVersion := c.getAPIVersion()
 	resp, err := c.doRequest("GET", "/rest/api/"+apiVersion+"/myself", nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to connect to Jira (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return checkResponse(resp)
 }

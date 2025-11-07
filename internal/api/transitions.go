@@ -4,20 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 )
 
 func (c *Client) UpdateIssueStatus(issueKey, status string) error {
-	apiVersion := "3"
-	if c.AuthType == "pat" {
-		apiVersion = "2"
-	}
-
 	transitions, err := c.GetTransitions(issueKey)
 	if err != nil {
-		return fmt.Errorf("error fetching transitions: %w", err)
+		return fmt.Errorf("fetching transitions: %w", err)
 	}
 
 	statusAliases := map[string][]string{
@@ -64,57 +57,37 @@ func (c *Client) UpdateIssueStatus(issueKey, status string) error {
 		for i, t := range transitions.Transitions {
 			availableStatuses[i] = t.To.Name
 		}
-		return fmt.Errorf("no matching transition found for '%s'. Available transitions: %s",
+		return fmt.Errorf("no matching transition found for '%s'. Available: %s",
 			status, strings.Join(availableStatuses, ", "))
 	}
 
-	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/transitions", apiVersion, issueKey)
+	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/transitions", c.getAPIVersion(), issueKey)
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"transition": map[string]string{
 			"id": matchedTransition.ID,
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("error creating request body: %w", err)
+		return fmt.Errorf("marshaling transition: %w", err)
 	}
 
-	bodyReader := bytes.NewReader(requestBody)
-	resp, err := c.doRequest("POST", endpoint, bodyReader)
+	resp, err := c.doRequest("POST", endpoint, bytes.NewReader(requestBody))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update status (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+	return checkResponse(resp)
 }
 
 func (c *Client) GetTransitions(issueKey string) (*TransitionResponse, error) {
-	apiVersion := "3"
-	if c.AuthType == "pat" {
-		apiVersion = "2"
-	}
-
-	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/transitions", apiVersion, issueKey)
+	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s/transitions", c.getAPIVersion(), issueKey)
 	resp, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get transitions (status %d): %s", resp.StatusCode, string(body))
-	}
-
 	var transitions TransitionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&transitions); err != nil {
-		return nil, fmt.Errorf("error decoding transitions: %w", err)
-	}
-
-	return &transitions, nil
+	return &transitions, decodeJSON(resp, &transitions)
 }
