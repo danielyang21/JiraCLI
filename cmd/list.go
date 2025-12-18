@@ -16,10 +16,13 @@ var listCmd = &cobra.Command{
 	Long: `List Jira tickets with various filtering options.
 
 Examples:
-  jira list                    # List recent tickets
-  jira list --project PROJ     # List tickets in a specific project
-  jira list --status "To Do"   # List tickets with specific status
-  jira list --assignee @me     # List tickets assigned to you`,
+  jira list                      # Your tickets (default)
+  jira list --mine               # Your tickets (explicit)
+  jira list --all                # All tickets in default project
+  jira list --recent             # Recently updated (last 7 days)
+  jira list -p KAN               # All tickets in KAN project
+  jira list -s "In Progress"     # Tickets with specific status
+  jira list -a @me -s Done       # Your done tickets`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.LoadAndValidate()
 		jql := buildJQLQuery(cmd, cfg)
@@ -35,17 +38,29 @@ Examples:
 }
 
 func buildJQLQuery(cmd *cobra.Command, cfg *config.Config) string {
+	mine, _ := cmd.Flags().GetBool("mine")
+	all, _ := cmd.Flags().GetBool("all")
+	recent, _ := cmd.Flags().GetBool("recent")
 	project, _ := cmd.Flags().GetString("project")
 	status, _ := cmd.Flags().GetString("status")
 	assignee, _ := cmd.Flags().GetString("assignee")
 
 	var jqlParts []string
 
-	// Use default project if specified and no project flag provided
+	if recent {
+		jqlParts = append(jqlParts, "updated >= -7d")
+	}
+
+	if all {
+		if cfg.DefaultProject != "" && project == "" {
+			jqlParts = append(jqlParts, fmt.Sprintf("project = %s", cfg.DefaultProject))
+		}
+	} else if mine || (!all && assignee == "" && !recent) {
+		jqlParts = append(jqlParts, "assignee = currentUser()")
+	}
+
 	if project != "" {
 		jqlParts = append(jqlParts, fmt.Sprintf("project = %s", project))
-	} else if cfg.DefaultProject != "" {
-		jqlParts = append(jqlParts, fmt.Sprintf("project = %s", cfg.DefaultProject))
 	}
 
 	if status != "" {
@@ -60,17 +75,19 @@ func buildJQLQuery(cmd *cobra.Command, cfg *config.Config) string {
 		}
 	}
 
-	// Default query if no filters provided
-	jql := "ORDER BY updated DESC"
-	if len(jqlParts) > 0 {
-		jql = strings.Join(jqlParts, " AND ") + " " + jql
+	if len(jqlParts) == 0 {
+		jqlParts = append(jqlParts, "assignee = currentUser()")
 	}
 
-	return jql
+	return strings.Join(jqlParts, " AND ") + " ORDER BY status ASC, updated DESC"
 }
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+
+	listCmd.Flags().Bool("mine", false, "show only your tickets (default behavior)")
+	listCmd.Flags().Bool("all", false, "show all tickets in default project")
+	listCmd.Flags().Bool("recent", false, "show recently updated tickets (last 7 days)")
 	listCmd.Flags().StringP("project", "p", "", "filter by project key")
 	listCmd.Flags().StringP("status", "s", "", "filter by status")
 	listCmd.Flags().StringP("assignee", "a", "", "filter by assignee (@me for yourself)")

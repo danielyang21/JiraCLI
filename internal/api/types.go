@@ -96,11 +96,47 @@ type SearchResults struct {
 }
 
 type Comment struct {
-	ID      string    `json:"id"`
-	Body    string    `json:"body"`
-	Author  User      `json:"author"`
-	Created time.Time `json:"created"`
-	Updated time.Time `json:"updated"`
+	ID      string      `json:"id"`
+	Body    interface{} `json:"body"`
+	Author  User        `json:"author"`
+	Created JiraTime    `json:"created"`
+	Updated JiraTime    `json:"updated"`
+}
+
+func (c *Comment) GetBodyText() string {
+	if c.Body == nil {
+		return ""
+	}
+
+	if bodyStr, ok := c.Body.(string); ok {
+		return bodyStr
+	}
+
+	if bodyMap, ok := c.Body.(map[string]interface{}); ok {
+		return extractTextFromADF(bodyMap)
+	}
+
+	return "(Unable to parse comment body)"
+}
+
+func extractTextFromADF(adf map[string]interface{}) string {
+	var text string
+
+	if adf["type"] == "text" {
+		if textVal, ok := adf["text"].(string); ok {
+			return textVal
+		}
+	}
+
+	if content, ok := adf["content"].([]interface{}); ok {
+		for _, item := range content {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				text += extractTextFromADF(itemMap)
+			}
+		}
+	}
+
+	return text
 }
 
 type Transition struct {

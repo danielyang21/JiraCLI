@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/danielyan21/JiraCLI/internal/api"
 	"github.com/danielyan21/JiraCLI/internal/config"
 	"github.com/danielyan21/JiraCLI/internal/ui"
 	"github.com/spf13/cobra"
@@ -29,7 +30,13 @@ Examples:
 		issue, err := client.GetIssue(ticketKey)
 		ui.FatalIfError(err, "Error fetching ticket")
 
-		ui.RenderIssueDetail(issue, cfg.JiraURL, showComments)
+		var comments []api.Comment
+		if showComments {
+			comments, err = client.GetComments(ticketKey)
+			ui.FatalIfError(err, "Error fetching comments")
+		}
+
+		ui.RenderIssueDetail(issue, cfg.JiraURL, comments)
 	},
 }
 

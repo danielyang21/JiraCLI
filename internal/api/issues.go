@@ -3,7 +3,17 @@ package api
 import "fmt"
 
 func (c *Client) GetIssue(issueKey string) (*Issue, error) {
-	endpoint := fmt.Sprintf("/rest/api/%s/issue/%s", c.getAPIVersion(), issueKey)
+	apiVersion := c.getAPIVersion()
+	var endpoint string
+
+	// For API v3 (basic auth/Jira Cloud), explicitly request all navigable fields
+	// API v3 defaults to only returning a minimal set of fields
+	if apiVersion == "3" {
+		endpoint = fmt.Sprintf("/rest/api/%s/issue/%s?fields=*navigable", apiVersion, issueKey)
+	} else {
+		endpoint = fmt.Sprintf("/rest/api/%s/issue/%s", apiVersion, issueKey)
+	}
+
 	resp, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err

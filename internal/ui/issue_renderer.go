@@ -31,7 +31,7 @@ func RenderIssueList(results *api.SearchResults) {
 	fmt.Printf("\n%s\n", c.Green(fmt.Sprintf("Showing %d of %d total results", actualCount, totalCount)))
 }
 
-func RenderIssueDetail(issue *api.Issue, jiraURL string, showComments bool) {
+func RenderIssueDetail(issue *api.Issue, jiraURL string, comments []api.Comment) {
 	c := NewColorFuncs()
 
 	printIssueHeader(issue, c)
@@ -39,8 +39,8 @@ func RenderIssueDetail(issue *api.Issue, jiraURL string, showComments bool) {
 	printIssueDescription(issue, c)
 	printBrowserLink(issue, jiraURL, c)
 
-	if showComments {
-		fmt.Println("\n[Comments feature coming soon]")
+	if len(comments) > 0 {
+		printComments(comments, c)
 	}
 }
 
@@ -117,12 +117,24 @@ func printIssueDescription(issue *api.Issue, c *ColorFuncs) {
 		switch desc := issue.Fields.Description.(type) {
 		case string:
 			if desc != "" {
-				fmt.Printf("  %s\n", desc)
+				wrappedText := wrapText(desc, 78)
+				for _, line := range strings.Split(wrappedText, "\n") {
+					fmt.Printf("  %s\n", line)
+				}
 			} else {
 				fmt.Printf("  %s\n", c.Gray("(No description)"))
 			}
 		case map[string]interface{}:
-			fmt.Printf("  %s\n", c.Gray("(Rich text description available in web UI)"))
+			// Try to extract text from ADF format
+			text := extractDescriptionFromADF(desc)
+			if text != "" {
+				wrappedText := wrapText(text, 78)
+				for _, line := range strings.Split(wrappedText, "\n") {
+					fmt.Printf("  %s\n", line)
+				}
+			} else {
+				fmt.Printf("  %s\n", c.Gray("(No description)"))
+			}
 		default:
 			fmt.Printf("  %s\n", c.Gray("(No description)"))
 		}
@@ -131,6 +143,89 @@ func printIssueDescription(issue *api.Issue, c *ColorFuncs) {
 	}
 }
 
+func extractDescriptionFromADF(adf map[string]interface{}) string {
+	var text string
+
+	if adf["type"] == "text" {
+		if textVal, ok := adf["text"].(string); ok {
+			return textVal
+		}
+	}
+
+	if content, ok := adf["content"].([]interface{}); ok {
+		for i, item := range content {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				itemText := extractDescriptionFromADF(itemMap)
+				if itemText != "" {
+					// Add spacing between paragraphs
+					if i > 0 && adf["type"] == "doc" {
+						text += "\n\n"
+					}
+					text += itemText
+				}
+			}
+		}
+	}
+
+	return text
+}
+
 func printBrowserLink(issue *api.Issue, jiraURL string, c *ColorFuncs) {
 	fmt.Printf("\n%s %s\n", c.Green("View in browser:"), c.Cyan(fmt.Sprintf("%s/browse/%s", jiraURL, issue.Key)))
+}
+
+func printComments(comments []api.Comment, c *ColorFuncs) {
+	if len(comments) == 0 {
+		fmt.Printf("\n%s\n", c.Gray("No comments"))
+		return
+	}
+
+	fmt.Printf("\n%s (%d)\n", c.Bold("Comments:"), len(comments))
+	fmt.Println(strings.Repeat("-", 80))
+
+	for i, comment := range comments {
+		if i > 0 {
+			fmt.Println(strings.Repeat("-", 80))
+		}
+
+		fmt.Printf("\n%s %s\n", c.Yellow(comment.Author.DisplayName), c.Gray(comment.Created.Format("2006-01-02 15:04")))
+
+		bodyText := comment.GetBodyText()
+		if bodyText != "" {
+			wrappedText := wrapText(bodyText, 78)
+			for _, line := range strings.Split(wrappedText, "\n") {
+				fmt.Printf("  %s\n", line)
+			}
+		} else {
+			fmt.Printf("  %s\n", c.Gray("(Empty comment)"))
+		}
+		fmt.Println()
+	}
+}
+
+func wrapText(text string, width int) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return text
+	}
+
+	var lines []string
+	var currentLine string
+
+	for _, word := range words {
+		if currentLine == "" {
+			currentLine = word
+		} else if len(currentLine)+1+len(word) <= width {
+			currentLine += " " + word
+		} else {
+			lines = append(lines, currentLine)
+			currentLine = word
+		}
+	}
+
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return strings.Join(lines, "\n")
 }

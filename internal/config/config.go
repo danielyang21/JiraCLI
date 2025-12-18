@@ -1,15 +1,12 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"strings"
-	"syscall"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/danielyan21/JiraCLI/internal/api"
 	"github.com/spf13/viper"
-	"golang.org/x/term"
 )
 
 type Config struct {
@@ -21,88 +18,86 @@ type Config struct {
 }
 
 func InitializeConfig() error {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Print("Jira URL (e.g., https://yourcompany.atlassian.net): ")
-	jiraURL, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("error reading Jira URL: %w", err)
+	var jiraURL string
+	urlPrompt := &survey.Input{
+		Message: "Jira URL:",
+		Help:    "e.g., https://yourcompany.atlassian.net",
 	}
-	jiraURL = strings.TrimSpace(jiraURL)
-
-	fmt.Println("\nAuthentication method:")
-	fmt.Println("  1. Email + API Token (Jira Cloud)")
-	fmt.Println("  2. Personal Access Token / PAT (Jira Server/DC)")
-	fmt.Println("  3. Username + Password (Basic Auth)")
-	fmt.Print("Select (1, 2, or 3) [default: 1]: ")
-	authChoice, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("error reading auth choice: %w", err)
+	if err := survey.AskOne(urlPrompt, &jiraURL, survey.WithValidator(survey.Required)); err != nil {
+		return err
 	}
-	authChoice = strings.TrimSpace(authChoice)
-	if authChoice == "" {
-		authChoice = "1"
+
+	var authMethod string
+	authPrompt := &survey.Select{
+		Message: "Authentication method:",
+		Options: []string{
+			"Email + API Token (Jira Cloud)",
+			"Personal Access Token (Jira Server/DC)",
+			"Username + Password (Basic Auth)",
+		},
+		Default: "Email + API Token (Jira Cloud)",
+	}
+	if err := survey.AskOne(authPrompt, &authMethod); err != nil {
+		return err
 	}
 
 	var authType, email, apiToken string
 
-	switch authChoice {
-	case "2":
+	switch authMethod {
+	case "Personal Access Token (Jira Server/DC)":
 		authType = "pat"
-		fmt.Println("\nUsing Personal Access Token authentication")
-		fmt.Println("To create a PAT, go to: " + jiraURL + "/secure/ViewProfile.jspa")
-		fmt.Println("Then click 'Personal Access Tokens' in the sidebar")
-		fmt.Print("\nPersonal Access Token (hidden): ")
-		apiTokenBytes, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return fmt.Errorf("error reading PAT: %w", err)
-		}
-		apiToken = strings.TrimSpace(string(apiTokenBytes))
-		fmt.Println()
-	case "3":
-		// Username + Password authentication
-		authType = "basic"
-		fmt.Println("\nUsing Username + Password authentication")
-		fmt.Print("Username: ")
-		email, err = reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("error reading username: %w", err)
-		}
-		email = strings.TrimSpace(email)
+		fmt.Printf("\nTo create a PAT, go to: %s/secure/ViewProfile.jspa\n", jiraURL)
+		fmt.Println("Then click 'Personal Access Tokens' in the sidebar\n")
 
-		fmt.Print("Password (hidden): ")
-		passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return fmt.Errorf("error reading password: %w", err)
+		patPrompt := &survey.Password{
+			Message: "Personal Access Token:",
 		}
-		apiToken = strings.TrimSpace(string(passwordBytes))
-		fmt.Println()
+		if err := survey.AskOne(patPrompt, &apiToken, survey.WithValidator(survey.Required)); err != nil {
+			return err
+		}
+
+	case "Username + Password (Basic Auth)":
+		authType = "basic"
+
+		usernamePrompt := &survey.Input{
+			Message: "Username:",
+		}
+		if err := survey.AskOne(usernamePrompt, &email, survey.WithValidator(survey.Required)); err != nil {
+			return err
+		}
+
+		passwordPrompt := &survey.Password{
+			Message: "Password:",
+		}
+		if err := survey.AskOne(passwordPrompt, &apiToken, survey.WithValidator(survey.Required)); err != nil {
+			return err
+		}
+
 	default:
-		// Email + API Token authentication (default)
 		authType = "basic"
-		fmt.Println("\nUsing Email + API Token authentication")
-		fmt.Print("Email: ")
-		email, err = reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("error reading email: %w", err)
-		}
-		email = strings.TrimSpace(email)
 
-		fmt.Print("API Token (hidden): ")
-		apiTokenBytes, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return fmt.Errorf("error reading API token: %w", err)
+		emailPrompt := &survey.Input{
+			Message: "Email:",
 		}
-		apiToken = strings.TrimSpace(string(apiTokenBytes))
-		fmt.Println()
+		if err := survey.AskOne(emailPrompt, &email, survey.WithValidator(survey.Required)); err != nil {
+			return err
+		}
+
+		tokenPrompt := &survey.Password{
+			Message: "API Token:",
+			Help:    "Create one at: " + jiraURL + "/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens",
+		}
+		if err := survey.AskOne(tokenPrompt, &apiToken, survey.WithValidator(survey.Required)); err != nil {
+			return err
+		}
 	}
 
-	fmt.Print("Default project key (optional, e.g., PROJ): ")
-	defaultProject, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("error reading default project: %w", err)
+	var defaultProject string
+	projectPrompt := &survey.Input{
+		Message: "Default project key (optional):",
+		Help:    "e.g., PROJ, KAN",
 	}
-	defaultProject = strings.TrimSpace(defaultProject)
+	survey.AskOne(projectPrompt, &defaultProject)
 
 	viper.Set("jira_url", jiraURL)
 	viper.Set("auth_type", authType)
@@ -110,21 +105,19 @@ func InitializeConfig() error {
 	viper.Set("api_token", apiToken)
 	viper.Set("default_project", defaultProject)
 
-	// Get config file path
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("error getting home directory: %w", err)
+		return fmt.Errorf("getting home directory: %w", err)
 	}
 
 	configPath := home + "/.jira-cli.yaml"
 
 	if err := viper.WriteConfigAs(configPath); err != nil {
-		return fmt.Errorf("error writing config file: %w", err)
+		return fmt.Errorf("writing config file: %w", err)
 	}
 
-	// Set restrictive permissions on config file (600)
 	if err := os.Chmod(configPath, 0600); err != nil {
-		return fmt.Errorf("error setting config file permissions: %w", err)
+		return fmt.Errorf("setting config file permissions: %w", err)
 	}
 
 	fmt.Printf("\nConfiguration saved to: %s\n", configPath)
